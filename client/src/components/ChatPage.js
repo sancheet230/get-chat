@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ChatPage.css';
 
-const ChatPage = ({ authToken }) => {
+const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
   const [users, setUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [websocket, setWebsocket] = useState(null);
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
 
@@ -22,28 +23,107 @@ const ChatPage = ({ authToken }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Fetch users
+  // Fetch users when authToken becomes available
   useEffect(() => {
     const fetchUsers = async () => {
+      if (!authToken) {
+        return;
+      }
+      
       try {
         const response = await fetch('http://localhost:8000/api/users', {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }
         });
+        
+        if (response.status === 401) {
+          handleLogout();
+          return;
+        }
+        
         const data = await response.json();
         setUsers(data);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
     };
-
+    
     fetchUsers();
+  }, [authToken]);
+
+  // Setup WebSocket connection
+  useEffect(() => {
+    if (!authToken) return;
+    
+    const ws = new WebSocket('ws://localhost:8001');
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      // Send authentication message
+      ws.send(JSON.stringify({
+        type: 'authenticate',
+        token: authToken
+      }));
+      setWebsocket(ws);
+    };
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message received:', data);
+      
+      if (data.type === 'message') {
+        // Add new message to the messages array
+        const newMsg = {
+          id: data.id || Date.now().toString(),
+          sender_id: data.sender_id,
+          receiver_id: data.receiver_id,
+          content: data.content,
+          timestamp: new Date(data.timestamp)
+        };
+        
+        console.log('Adding message to state:', newMsg);
+        
+        // Add message to state
+        setMessages(prevMessages => {
+          // Check if message already exists (avoid duplicates)
+          const exists = prevMessages.some(msg => msg.id === newMsg.id);
+          if (exists) {
+            console.log('Message already exists, skipping');
+            return prevMessages;
+          }
+          
+          console.log('Adding new message to state');
+          return [...prevMessages, newMsg];
+        });
+      } else if (data.type === 'error') {
+        if (data.message === 'Token has expired') {
+          alert('Your session has expired. Please log in again.');
+          handleLogout();
+        }
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      setWebsocket(null);
+    };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    // Cleanup function
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
   }, [authToken]);
 
   // Fetch messages when selected user changes
   useEffect(() => {
-    if (selectedUser) {
+    if (selectedUser && currentUser) {
       const fetchMessages = async () => {
         try {
           const response = await fetch(`http://localhost:8000/api/messages/${selectedUser.id}`, {
@@ -51,8 +131,20 @@ const ChatPage = ({ authToken }) => {
               'Authorization': `Bearer ${authToken}`
             }
           });
+          
+          if (response.status === 401) {
+            // Token expired or invalid
+            handleLogout();
+            return;
+          }
+          
           const data = await response.json();
-          setMessages(data);
+          // Filter messages for the selected conversation
+          const conversationMessages = data.filter(msg => 
+            (msg.sender_id === currentUser.id && msg.receiver_id === selectedUser.id) ||
+            (msg.sender_id === selectedUser.id && msg.receiver_id === currentUser.id)
+          );
+          setMessages(conversationMessages);
         } catch (error) {
           console.error('Error fetching messages:', error);
         }
@@ -60,7 +152,7 @@ const ChatPage = ({ authToken }) => {
 
       fetchMessages();
     }
-  }, [selectedUser, authToken]);
+  }, [selectedUser, authToken, currentUser]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -69,34 +161,85 @@ const ChatPage = ({ authToken }) => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedUser) return;
+    if (!newMessage.trim() || !selectedUser || !currentUser) return;
 
-    try {
-      const response = await fetch('http://localhost:8000/api/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          receiver_id: selectedUser.id,
-          content: newMessage
-        })
-      });
+    const messageContent = newMessage;
+    setNewMessage(''); // Clear input immediately for better UX
 
-      const data = await response.json();
-      if (response.ok) {
-        setMessages([...messages, data]);
-        setNewMessage('');
+    // If WebSocket is available, use it for real-time messaging
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      console.log('Sending message via WebSocket');
+      const messageData = {
+        type: 'message',
+        receiver_id: selectedUser.id,
+        content: messageContent
+      };
+      
+      websocket.send(JSON.stringify(messageData));
+      console.log('Message sent via WebSocket:', messageData);
+      
+      // Don't add optimistic message - wait for websocket confirmation
+      // This prevents duplicates
+    } else {
+      console.log('WebSocket not available, using HTTP fallback');
+      // Fallback to HTTP request
+      try {
+        const response = await fetch('http://localhost:8000/api/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            receiver_id: selectedUser.id,
+            content: messageContent
+          })
+        });
+
+        if (response.status === 401) {
+          // Token expired or invalid
+          handleLogout();
+          return;
+        }
+
+        const data = await response.json();
+        if (response.ok) {
+          console.log('Message sent via HTTP:', data);
+          setMessages(prevMessages => [...prevMessages, data]);
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    if (onLogout) onLogout();
     navigate('/login');
+  };
+
+  const handleShowSecurityCodes = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/security-codes/${currentUser?.email}`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+      
+      const data = await response.json();
+      
+      // Display security codes in an alert (in a real app, you'd show them in a modal)
+      alert(`Your security codes:\n${data.security_codes.join('\n')}`);
+    } catch (error) {
+      console.error('Error fetching security codes:', error);
+      alert('Error fetching security codes. Please try again.');
+    }
   };
 
   return (
@@ -110,7 +253,8 @@ const ChatPage = ({ authToken }) => {
           </div>
           {showSettings && (
             <div className="settings-dropdown">
-              <button onClick={() => alert('Security codes feature coming soon!')}>Security Codes</button>
+              <button onClick={handleShowSecurityCodes}>Security Codes</button>
+              <button onClick={onShowProfile}>Profile</button>
               <button onClick={handleLogout}>Logout</button>
             </div>
           )}
@@ -131,7 +275,11 @@ const ChatPage = ({ authToken }) => {
               onClick={() => setSelectedUser(user)}
             >
               <div className="user-avatar">
-                {user.username.charAt(0).toUpperCase()}
+                {user.profile_picture ? (
+                  <img src={user.profile_picture} alt={user.username} className="user-avatar-img" />
+                ) : (
+                  user.username.charAt(0).toUpperCase()
+                )}
               </div>
               <div className="user-info">
                 <div className="user-name">{user.username}</div>
@@ -149,16 +297,30 @@ const ChatPage = ({ authToken }) => {
             <div className="chat-header">
               <div className="chat-user-info">
                 <div className="chat-user-avatar">
-                  {selectedUser.username.charAt(0).toUpperCase()}
+                  {selectedUser.profile_picture ? (
+                    <img src={selectedUser.profile_picture} alt={selectedUser.username} className="chat-user-avatar-img" />
+                  ) : (
+                    selectedUser.username.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div className="chat-user-name">{selectedUser.username}</div>
               </div>
             </div>
             <div className="messages-container">
-              {messages.map(message => (
+              {(() => {
+                const filteredMessages = messages.filter(msg => 
+                  (msg.sender_id === currentUser?.id && msg.receiver_id === selectedUser.id) ||
+                  (msg.sender_id === selectedUser.id && msg.receiver_id === currentUser?.id)
+                );
+                console.log('All messages:', messages);
+                console.log('Current user ID:', currentUser?.id);
+                console.log('Selected user ID:', selectedUser.id);
+                console.log('Filtered messages:', filteredMessages);
+                return filteredMessages;
+              })().map(message => (
                 <div
                   key={message.id}
-                  className={`message ${message.sender_id === 'current-user-id' ? 'sent' : 'received'}`}
+                  className={`message ${message.sender_id === currentUser?.id ? 'sent' : 'received'}`}
                 >
                   <div className="message-content">
                     {message.content}
