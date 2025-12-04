@@ -8,7 +8,7 @@ const CONFIG = {
   
   WEBSOCKET_URL: (process.env.NODE_ENV === 'production' || process.env.REACT_APP_FORCE_RENDER_URLS === 'true')
     ? 'wss://get-chat-adyb.onrender.com/ws' // Your actual Render WebSocket URL
-    : 'ws://localhost:8001'
+    : 'ws://localhost:8000/ws'
 };
 
 export default CONFIG;
