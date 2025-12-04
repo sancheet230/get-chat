@@ -25,7 +25,10 @@ app = FastAPI(title="Get Chat API")
 async def debug_routes():
     print("Registered routes:")
     for route in app.routes:
-        print(f"  {route.methods} {route.path}")
+        if hasattr(route, 'methods'):
+            print(f"  {route.methods} {route.path}")
+        else:
+            print(f"  WebSocket {route.path}")
 
 # CORS middleware
 app.add_middleware(
