@@ -67,12 +67,36 @@ async def init_db():
         print(f"Existing collections: {collections}")
         
         # Create indexes for better performance
-        await db.users.create_index("email", unique=True)
-        await db.users.create_index("username", unique=True)
-        await db.groups.create_index("name")
-        await db.group_messages.create_index("group_id")
-        await db.group_invitations.create_index([("group_id", 1), ("invited_user_id", 1)])
-        await db.group_message_reads.create_index([("group_id", 1), ("user_id", 1)])
+        # Handle existing indexes gracefully
+        try:
+            await db.users.create_index("email", unique=True)
+        except Exception as e:
+            print(f"Email index creation skipped: {e}")
+        
+        try:
+            await db.users.create_index("username", unique=True)
+        except Exception as e:
+            print(f"Username index creation skipped: {e}")
+        
+        try:
+            await db.groups.create_index("name")
+        except Exception as e:
+            print(f"Groups name index creation skipped: {e}")
+        
+        try:
+            await db.group_messages.create_index("group_id")
+        except Exception as e:
+            print(f"Group messages index creation skipped: {e}")
+        
+        try:
+            await db.group_invitations.create_index([("group_id", 1), ("invited_user_id", 1)])
+        except Exception as e:
+            print(f"Group invitations index creation skipped: {e}")
+        
+        try:
+            await db.group_message_reads.create_index([("group_id", 1), ("user_id", 1)])
+        except Exception as e:
+            print(f"Group message reads index creation skipped: {e}")
         print("Database indexes created successfully")
     except Exception as e:
         print(f"Error initializing database: {e}")
