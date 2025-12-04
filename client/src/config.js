@@ -3,11 +3,11 @@ const CONFIG = {
   // For development, use localhost
   // For production (Vercel), use your Render backend URL
   API_BASE_URL: process.env.NODE_ENV === 'production' 
-    ? 'https://your-render-app-url.onrender.com' // TODO: Replace with your actual Render URL
+    ? 'https://get-chat-adyb.onrender.com' // Your actual Render URL
     : 'http://localhost:8000',
   
   WEBSOCKET_URL: process.env.NODE_ENV === 'production'
-    ? 'wss://your-render-app-url.onrender.com/ws' // TODO: Replace with your actual Render WebSocket URL
+    ? 'wss://get-chat-adyb.onrender.com/ws' // Your actual Render WebSocket URL
     : 'ws://localhost:8001'
 };
 
