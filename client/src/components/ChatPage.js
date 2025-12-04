@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ChatPage.css';
 
@@ -163,6 +163,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
     const interval = setInterval(fetchUsersAndGroups, 30000); // Every 30 seconds
     
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
 
   // Setup WebSocket connection
@@ -386,6 +387,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         ws.close();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]);
 
   // Fetch messages when selected user changes
@@ -475,6 +477,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
 
       fetchMessages();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser, authToken, currentUser, websocket]);
 
   // Fetch group messages when selected group changes
@@ -521,6 +524,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
 
       fetchGroupMessages();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup, authToken, currentUser, websocket]);
 
   // Scroll to bottom when messages change
@@ -775,10 +779,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
     });
   };
   
-  // Function to manually clear all notifications
-  const clearAllNotifications = () => {
-    setUnreadCounts({});
-  };
+
 
   const handleShowSecurityCodes = async () => {
     try {
@@ -925,37 +926,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
     );
   };
   
-  const handleInviteToGroup = async (groupId, userId) => {
-    try {
-      const response = await fetch('http://localhost:8000/api/group-invitations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          group_id: groupId,
-          invited_user_id: userId
-        })
-      });
-      
-      if (response.status === 401) {
-        handleLogout();
-        return;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to send invitation');
-      }
-      
-      const invitation = await response.json();
-      alert(`Invitation sent to ${invitation.invited_user_id}`);
-    } catch (error) {
-      console.error('Error sending invitation:', error);
-      alert(`Error sending invitation: ${error.message}`);
-    }
-  };
+
   
   const handleAcceptInvitation = async (invitationId) => {
     try {
@@ -980,7 +951,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         throw new Error(errorData.detail || 'Failed to accept invitation');
       }
       
-      const updatedInvitation = await response.json();
+      await response.json();
       
       // Refresh groups list to include the newly joined group
       const groupsResponse = await fetch('http://localhost:8000/api/groups', {
@@ -1024,7 +995,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         throw new Error(errorData.detail || 'Failed to reject invitation');
       }
       
-      const updatedInvitation = await response.json();
+      await response.json();
       alert('Invitation rejected.');
     } catch (error) {
       console.error('Error rejecting invitation:', error);
@@ -1334,9 +1305,6 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
                     (msg.sender_id === item.id && msg.receiver_id === currentUser?.id)
                   )
                   .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-                
-                // Determine if user is online (simplified for now)
-                const isOnline = true; // In a real app, this would come from WebSocket status updates
                 
                 return (
                   <div
