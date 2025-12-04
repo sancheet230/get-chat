@@ -9,3 +9,5 @@ pymongo==4.15.4
 python-dotenv==1.2.1
 websockets==12.0
 PyJWT==2.10.1
+aiohttp==3.9.1
+bson==0.5.10
