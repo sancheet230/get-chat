@@ -5,6 +5,7 @@ import SignupPage from './components/SignupPage';
 import ForgotPasswordPage from './components/ForgotPasswordPage';
 import ChatPage from './components/ChatPage';
 import ProfilePage from './components/ProfilePage';
+import CONFIG from './config';
 import './App.css';
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
       if (authToken) {
         console.log('Validating token:', authToken);
         try {
-          const response = await fetch('http://localhost:8000/api/current-user', {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/current-user`, {
             headers: {
               'Authorization': `Bearer ${authToken}`
             }
@@ -65,7 +66,7 @@ function App() {
       console.log('Fetching current user, authToken:', authToken, 'tokenLoaded:', tokenLoaded);
       if (authToken) {
         try {
-          const response = await fetch('http://localhost:8000/api/current-user', {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/current-user`, {
             headers: {
               'Authorization': `Bearer ${authToken}`
             }

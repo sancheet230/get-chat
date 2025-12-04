@@ -486,7 +486,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
     if (selectedGroup && currentUser) {
       const fetchGroupMessages = async () => {
         try {
-          const response = await fetch(`http://localhost:8000/api/group-messages/${selectedGroup.id}`, {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/group-messages/${selectedGroup.id}`, {
             headers: {
               'Authorization': `Bearer ${authToken}`
             }
@@ -580,7 +580,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         console.log('WebSocket not available, using HTTP fallback');
         // Fallback to HTTP request
         try {
-          const response = await fetch('http://localhost:8000/api/messages', {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/messages`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -634,7 +634,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         console.log('WebSocket not available, using HTTP fallback for group message');
         // Fallback to HTTP request for group messages
         try {
-          const response = await fetch('http://localhost:8000/api/group-messages', {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/group-messages`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -868,7 +868,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         console.error('Debug endpoint failed:', debugError);
       }
       
-      const response = await fetch('http://localhost:8000/api/groups', {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/groups`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -931,7 +931,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
   
   const handleAcceptInvitation = async (invitationId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/group-invitations/${invitationId}`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/group-invitations/${invitationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -955,7 +955,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
       await response.json();
       
       // Refresh groups list to include the newly joined group
-      const groupsResponse = await fetch('http://localhost:8000/api/groups', {
+      const groupsResponse = await fetch(`${CONFIG.API_BASE_URL}/api/groups`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -975,7 +975,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
   
   const handleRejectInvitation = async (invitationId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/group-invitations/${invitationId}`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/group-invitations/${invitationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1037,7 +1037,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         const formData = new FormData();
         formData.append('file', groupProfilePicture);
         
-        const uploadResponse = await fetch('http://localhost:8000/api/upload-group-picture', {
+        const uploadResponse = await fetch(`${CONFIG.API_BASE_URL}/api/upload-group-picture`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authToken}`
@@ -1059,7 +1059,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
       }
       
       // Update group
-      const response = await fetch(`http://localhost:8000/api/groups/${editingGroup.id}`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/groups/${editingGroup.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
