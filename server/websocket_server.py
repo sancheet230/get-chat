@@ -393,9 +393,13 @@ async def notify_user_status(user_id, status):
         del connected_clients[uid]
 
 async def main():
+    # WebSocket always uses port 8001
+    port = 8001
+    host = "0.0.0.0"  # Bind to all interfaces
+    
     # Start the WebSocket server
-    server = await websockets.serve(handle_client, "localhost", 8001)
-    print("WebSocket server starting on ws://localhost:8001")
+    server = await websockets.serve(handle_client, host, port)
+    print(f"WebSocket server starting on ws://{host}:{port}")
     await server.wait_closed()
 
 if __name__ == "__main__":
