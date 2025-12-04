@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CONFIG from '../config';
 import './AuthPage.css';
 
 const LoginPage = ({ setAuthToken }) => {
@@ -13,7 +14,7 @@ const LoginPage = ({ setAuthToken }) => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/login', {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

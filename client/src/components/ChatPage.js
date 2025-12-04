@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CONFIG from '../config';
 import './ChatPage.css';
 
 const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
@@ -58,7 +59,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         // Test server connectivity
         console.log('Testing server connectivity...');
         try {
-          const healthResponse = await fetch('http://localhost:8000/health');
+          const healthResponse = await fetch(`${CONFIG.API_BASE_URL}/health`);
           console.log('Health check response status:', healthResponse.status);
           if (healthResponse.ok) {
             const healthData = await healthResponse.json();
@@ -71,7 +72,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         // Test group endpoint
         console.log('Testing group endpoint...');
         try {
-          const testResponse = await fetch('http://localhost:8000/api/test-group', {
+          const testResponse = await fetch(`${CONFIG.API_BASE_URL}/api/test-group`, {
             method: 'POST'
           });
           console.log('Test group endpoint response status:', testResponse.status);
@@ -85,7 +86,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         
         // Fetch users
         console.log('Fetching users...');
-        const usersResponse = await fetch('http://localhost:8000/api/users', {
+        const usersResponse = await fetch(`${CONFIG.API_BASE_URL}/api/users`, {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }
@@ -105,7 +106,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         
         // Fetch groups
         console.log('Fetching groups...');
-        const groupsResponse = await fetch('http://localhost:8000/api/groups', {
+        const groupsResponse = await fetch(`${CONFIG.API_BASE_URL}/api/groups`, {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }
@@ -133,7 +134,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
         
         // Fetch group invitations
         console.log('Fetching group invitations...');
-        const invitationsResponse = await fetch('http://localhost:8000/api/group-invitations', {
+        const invitationsResponse = await fetch(`${CONFIG.API_BASE_URL}/api/group-invitations`, {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }
@@ -170,7 +171,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
   useEffect(() => {
     if (!authToken) return;
     
-    const ws = new WebSocket('ws://localhost:8001');
+    const ws = new WebSocket(CONFIG.WEBSOCKET_URL);
     
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -395,7 +396,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
     if (selectedUser && currentUser) {
       const fetchMessages = async () => {
         try {
-          const response = await fetch(`http://localhost:8000/api/messages/${selectedUser.id}`, {
+          const response = await fetch(`${CONFIG.API_BASE_URL}/api/messages/${selectedUser.id}`, {
             headers: {
               'Authorization': `Bearer ${authToken}`
             }
@@ -441,7 +442,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
             } else {
               // Fallback to HTTP request
               try {
-                await fetch('http://localhost:8000/api/messages/read', {
+                await fetch(`${CONFIG.API_BASE_URL}/api/messages/read`, {
                   method: 'PUT',
                   headers: {
                     'Content-Type': 'application/json',
@@ -672,7 +673,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
       const formData = new FormData();
       formData.append('file', selectedFile);
       
-      const uploadResponse = await fetch('http://localhost:8000/api/upload-media', {
+      const uploadResponse = await fetch(`${CONFIG.API_BASE_URL}/api/upload-media`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -710,7 +711,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
       } else {
         // Fallback to HTTP request
         console.log('WebSocket not available, using HTTP fallback for media message');
-        const response = await fetch('http://localhost:8000/api/send-media-message', {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/api/send-media-message`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -783,7 +784,7 @@ const ChatPage = ({ authToken, currentUser, onLogout, onShowProfile }) => {
 
   const handleShowSecurityCodes = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/security-codes/${currentUser?.email}`, {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/api/security-codes/${currentUser?.email}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
