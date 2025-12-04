@@ -31,9 +31,11 @@ async def debug_routes():
             print(f"  WebSocket {route.path}")
 
 # CORS middleware
+# Allow requests from localhost (development) and Vercel deployments
+# Using allow_origins=["*"] for simplicity, but in production you might want to restrict this
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
