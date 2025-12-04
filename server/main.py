@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Request
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ import hmac
 import urllib.parse
 import base64
 import aiohttp
+import json
 from bson import ObjectId
 
 # App initialization
@@ -1049,3 +1050,274 @@ if __name__ == "__main__":
     print("Server starting on port 8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
     print("Server stopped")
+
+# W
+ebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict = {}
+    
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+        print(f"User {user_id} connected via WebSocket")
+    
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+            print(f"User {user_id} disconnected")
+    
+    async def send_personal_message(self, message: str, user_id: str):
+        if user_id in self.active_connections:
+            try:
+                await self.active_connections[user_id].send_text(message)
+            except Exception as e:
+                print(f"Error sending to {user_id}: {e}")
+                self.disconnect(user_id)
+    
+    async def broadcast(self, message: str, exclude_user: str = None):
+        for user_id, connection in list(self.active_connections.items()):
+            if user_id != exclude_user:
+                try:
+                    await connection.send_text(message)
+                except Exception as e:
+                    print(f"Error broadcasting to {user_id}: {e}")
+                    self.disconnect(user_id)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    user_id = None
+    try:
+        # Wait for authentication
+        await websocket.accept()
+        auth_message = await websocket.receive_text()
+        auth_data = json.loads(auth_message)
+        
+        if auth_data.get("type") == "authenticate":
+            token = auth_data.get("token")
+            
+            # Validate JWT token
+            try:
+                from jose import jwt as jose_jwt
+                payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                email = payload.get("sub")
+                
+                # Get user from database
+                user = await db.users.find_one({"email": email})
+                if not user:
+                    await websocket.close()
+                    return
+                
+                user_id = str(user["_id"])
+                manager.active_connections[user_id] = websocket
+                print(f"User {email} connected with ID: {user_id}")
+                
+                # Handle incoming messages
+                while True:
+                    data_text = await websocket.receive_text()
+                    data = json.loads(data_text)
+                    
+                    if data.get("type") == "message":
+                        await handle_websocket_message(data, user_id)
+                    elif data.get("type") == "group_message":
+                        await handle_websocket_group_message(data, user_id)
+                    elif data.get("type") == "read_status":
+                        await handle_websocket_read_status(data, user_id)
+                    elif data.get("type") == "group_read_status":
+                        await handle_websocket_group_read_status(data, user_id)
+                        
+            except jose_jwt.ExpiredSignatureError:
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": "Token has expired"
+                }))
+                await websocket.close()
+                return
+            except Exception as e:
+                print(f"Authentication error: {e}")
+                await websocket.close()
+                return
+                    
+    except WebSocketDisconnect:
+        if user_id:
+            manager.disconnect(user_id)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        if user_id:
+            manager.disconnect(user_id)
+
+async def handle_websocket_message(data, sender_id):
+    receiver_id = data.get("receiver_id")
+    content = data.get("content")
+    media_url = data.get("media_url")
+    media_type = data.get("media_type")
+    
+    # Save message to database
+    timestamp = datetime.utcnow()
+    message_doc = {
+        "sender_id": sender_id,
+        "receiver_id": receiver_id,
+        "content": content,
+        "timestamp": timestamp,
+        "is_read": False
+    }
+    
+    if media_url:
+        message_doc["media_url"] = media_url
+        message_doc["media_type"] = media_type
+    
+    result = await db.messages.insert_one(message_doc)
+    message_doc["id"] = str(result.inserted_id)
+    
+    # Prepare message data
+    message_data = {
+        "type": "message",
+        "id": message_doc["id"],
+        "sender_id": sender_id,
+        "receiver_id": receiver_id,
+        "content": content,
+        "timestamp": message_doc["timestamp"].isoformat(),
+        "is_read": False
+    }
+    
+    if media_url:
+        message_data["media_url"] = media_url
+        message_data["media_type"] = media_type
+    
+    # Send to receiver and sender
+    await manager.send_personal_message(json.dumps(message_data), receiver_id)
+    await manager.send_personal_message(json.dumps(message_data), sender_id)
+    
+    # Send notification
+    sender_user = await db.users.find_one({"_id": ObjectId(sender_id)})
+    notification_data = {
+        "type": "notification",
+        "message_id": message_doc["id"],
+        "sender_id": sender_id,
+        "sender_username": sender_user["username"] if sender_user else "Unknown",
+        "receiver_id": receiver_id,
+        "content": content[:50] + "..." if len(content) > 50 else content,
+        "timestamp": message_doc["timestamp"].isoformat(),
+        "has_media": bool(media_url),
+        "media_type": media_type
+    }
+    await manager.send_personal_message(json.dumps(notification_data), receiver_id)
+
+async def handle_websocket_group_message(data, sender_id):
+    group_id = data.get("group_id")
+    content = data.get("content")
+    media_url = data.get("media_url")
+    media_type = data.get("media_type")
+    
+    # Verify user is a member
+    group = await db.groups.find_one({
+        "_id": ObjectId(group_id),
+        "members.user_id": sender_id
+    })
+    
+    if not group:
+        return
+    
+    # Save message
+    timestamp = datetime.utcnow()
+    message_doc = {
+        "group_id": group_id,
+        "sender_id": sender_id,
+        "content": content,
+        "timestamp": timestamp,
+        "is_read": False
+    }
+    
+    if media_url:
+        message_doc["media_url"] = media_url
+        message_doc["media_type"] = media_type
+    
+    result = await db.group_messages.insert_one(message_doc)
+    message_doc["id"] = str(result.inserted_id)
+    
+    # Prepare message data
+    message_data = {
+        "type": "group_message",
+        "id": message_doc["id"],
+        "group_id": group_id,
+        "sender_id": sender_id,
+        "content": content,
+        "timestamp": message_doc["timestamp"].isoformat(),
+        "is_read": False
+    }
+    
+    if media_url:
+        message_data["media_url"] = media_url
+        message_data["media_type"] = media_type
+    
+    # Send to all group members
+    sender_user = await db.users.find_one({"_id": ObjectId(sender_id)})
+    for member in group["members"]:
+        member_id = member["user_id"]
+        await manager.send_personal_message(json.dumps(message_data), member_id)
+        
+        # Send notification to others
+        if member_id != sender_id:
+            notification_data = {
+                "type": "notification",
+                "message_id": message_doc["id"],
+                "sender_id": sender_id,
+                "sender_username": sender_user["username"] if sender_user else "Unknown",
+                "group_id": group_id,
+                "group_name": group["name"],
+                "content": content[:50] + "..." if len(content) > 50 else content,
+                "timestamp": message_doc["timestamp"].isoformat(),
+                "has_media": bool(media_url),
+                "media_type": media_type,
+                "is_group": True
+            }
+            await manager.send_personal_message(json.dumps(notification_data), member_id)
+
+async def handle_websocket_read_status(data, reader_id):
+    message_ids = data.get("message_ids", [])
+    
+    # Update messages in database
+    result = await db.messages.update_many(
+        {"_id": {"$in": [ObjectId(mid) for mid in message_ids]},
+         "receiver_id": reader_id},
+        {"$set": {"is_read": True}}
+    )
+    
+    # Send read status updates to senders
+    for message_id in message_ids:
+        message = await db.messages.find_one({"_id": ObjectId(message_id)})
+        if message and "sender_id" in message:
+            sender_id = message["sender_id"]
+            read_update_data = {
+                "type": "read_status",
+                "message_id": message_id,
+                "reader_id": reader_id
+            }
+            await manager.send_personal_message(json.dumps(read_update_data), sender_id)
+
+async def handle_websocket_group_read_status(data, reader_id):
+    group_id = data.get("group_id")
+    timestamp = datetime.utcnow()
+    
+    # Update read status
+    await db.group_message_reads.update_one(
+        {"group_id": group_id, "user_id": reader_id},
+        {"$set": {"last_read_timestamp": timestamp}},
+        upsert=True
+    )
+    
+    # Notify group members
+    group = await db.groups.find_one({"_id": ObjectId(group_id)})
+    if group:
+        for member in group["members"]:
+            member_id = member["user_id"]
+            if member_id != reader_id:
+                read_update_data = {
+                    "type": "group_read_status",
+                    "group_id": group_id,
+                    "reader_id": reader_id,
+                    "timestamp": timestamp.isoformat()
+                }
+                await manager.send_personal_message(json.dumps(read_update_data), member_id)
