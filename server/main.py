@@ -1051,8 +1051,7 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
     print("Server stopped")
 
-# W
-ebSocket connection manager
+# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict = {}
